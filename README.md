@@ -99,6 +99,25 @@ npm run dev
 
 ---
 
+## 🧠 New Feature: Paragraph → Mind-Map (CLI Tool)
+
+This feature extracts a specific paragraph from a PDF, cleans it using the LLM, and transforms the text into a structured, renderable **mind map**.
+
+### 📌 Run the CLI
+
+From project root:
+
+```env
+
+uv run --project backend python execute.py <PDF_PATH> <PAGE_NUMBER> <PARAGRAPH_INDEX> --output mindmap.html
+```
+
+#### Example:
+
+`uv run --project backend python execute.py backend/data/why-llm-cant-develop-software.pdf 1 15 --output mindmap.html`
+
+---
+
 ## Configuration
 
 ### OpenAI API Compatibility
@@ -119,6 +138,30 @@ To use a different provider, edit `backend/.env`:
 - `LLM_MODEL` - Model name
 
 ---
+
+## 📚 Documentation
+
+This repository includes detailed engineering documentation:
+| File | Purpose |
+| --- | --- |
+| architecture.md | Core system architecture (old + new feature) |
+| dfd.md | Data flow diagrams (Mermaid) |
+| sequence.md | Sequence diagrams (Mermaid) |
+| CHANGELOG.md | Summary of added features and modifications |
+
+---
+
+## 🪵 Logging
+
+Logging tracks:
+
+- Execution time per stage
+- RAM usage
+- Transcript size and metadata
+- Model inference time
+- Exceptions and fallbacks
+
+## Sample output is available in: 📁 `performance.log`
 
 ## Troubleshooting
 
