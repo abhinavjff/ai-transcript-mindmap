@@ -87,3 +87,4 @@ This workflow explains how a paragraph in a PDF becomes a structured mind-map.
 User obtains an interactive web-based mind map derived from the selected paragraph.
 
 ---
+---
