@@ -45,6 +45,7 @@ This document summarizes the modifications, enhancements, and new files added as
 
 - Maintained project structure alignment with the base repository.
 - Introduced separation of concerns between:
+  
   - PDF extraction
   - Text cleaning
   - Mind-map generation
