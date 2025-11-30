@@ -1,4 +1,4 @@
-# 1. Local AI Transcript & Mind-Map App — High Architecture Overview
+# 1. Local AI Transcript & Mind-Map App — High level Architecture Overview
 
 The Local AI Transcript & Mind-Map App is a full-stack application designed to transform unstructured information (audio or text) into structured, meaningful output — entirely offline. The system now supports two primary processing pipelines:
 
@@ -494,4 +494,5 @@ To improve code reliability and tracking, the system implements a robust logging
 - **Performance Metrics:**
   - **Execution Time:** `time.time()` deltas are logged for every LLM network call to differentiate between "Network Latency" and "Local Processing".
   - **Memory Usage:** `sys.getsizeof()` is logged for the final text payload to ensure we stay within safe memory bounds for the JSON parser.
+
 
