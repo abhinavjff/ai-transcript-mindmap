@@ -1,22 +1,21 @@
-import logging
-import time
-from pypdf import PdfReader
 import os
+import time
 
-# Configure logging to satisfy requirements
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
-logger = logging.getLogger(__name__)
+from pypdf import PdfReader
+
+from logger_config import setup_logger
+
+logger = setup_logger(__name__)
 
 
+# --- ORIGINAL FUNCTION (Restored for CLI compatibility) ---
 def extract_paragraph(pdf_path: str, page_number: int, paragraph_index: int):
     """
-    Extracts a specific paragraph from a PDF file.
+    Extracts a specific single paragraph from a PDF file.
+    Used by: cli_mindmap.py
     """
     start_time = time.time()
 
-    # Check if file exists
     if not os.path.exists(pdf_path):
         logger.error(f"File not found: {pdf_path}")
         raise FileNotFoundError(f"PDF not found at {pdf_path}")
@@ -31,47 +30,31 @@ def extract_paragraph(pdf_path: str, page_number: int, paragraph_index: int):
         page = reader.pages[internal_page_idx]
         full_text = page.extract_text()
 
-        # STRATEGY 1: Split by double newlines (standard paragraphs)
+        # Strategy 1: Double newlines
         paragraphs = [p.strip() for p in full_text.split("\n\n") if p.strip()]
 
-        # STRATEGY 2: If that failed (only 1 result), try splitting by single newlines
-        # but filter out very short lines to avoid headlines/page numbers
+        # Strategy 2: Single newlines fallback
         if len(paragraphs) <= 1:
-            logger.info(
-                "Double newline split yielded 1 or 0 results. Trying single newline split."
-            )
-            raw_lines = [line.strip() for line in full_text.split("\n") if line.strip()]
-            # Treat every non-empty line as a paragraph for now
-            paragraphs = raw_lines
+            paragraphs = [
+                line.strip() for line in full_text.split("\n") if line.strip()
+            ]
 
         if paragraph_index < 0 or paragraph_index >= len(paragraphs):
-            # Debug info: print what we actually found
-            logger.warning(f"Available paragraphs ({len(paragraphs)}):")
-            for i, p in enumerate(paragraphs[:3]):  # Print first 3 to avoid spam
-                logger.warning(f" [{i}]: {p[:50]}...")
-
-            error_msg = f"Paragraph index {paragraph_index} out of range on page {page_number}. Found {len(paragraphs)} paragraphs."
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+            raise ValueError(f"Paragraph index {paragraph_index} out of range.")
 
         target_text = paragraphs[paragraph_index]
-        end_time = time.time()
-        extraction_time = end_time - start_time
 
-        # Log metadata as required
-        logger.info(f"--- Extraction Metadata ---")
+        # Log metadata
+        logger.info("--- Extraction Metadata (Single) ---")
         logger.info(f"Source: {pdf_path}")
-        logger.info(f"Page Number: {page_number}")
         logger.info(f"Paragraph Index: {paragraph_index}")
-        logger.info(f"Paragraph Length: {len(target_text)} chars")
-        logger.info(f"Extraction Time: {extraction_time:.6f} seconds")
+        logger.info(f"Extraction Time: {time.time() - start_time:.4f}s")
 
         return {
             "text": target_text,
             "page": page_number,
             "paragraph_index": paragraph_index,
             "length": len(target_text),
-            "extraction_time": extraction_time,
         }
 
     except Exception as e:
@@ -79,14 +62,57 @@ def extract_paragraph(pdf_path: str, page_number: int, paragraph_index: int):
         raise e
 
 
-if __name__ == "__main__":
-    test_path = "data/why-llm-cant-develop-software.pdf"
+# --- NEW FUNCTION (For Web UI / Feedback Requirement) ---
+def extract_text_range(
+    pdf_path: str, page_number: int, start_para: int = 0, end_para: int = 2
+):
+    """
+    Extracts a range of paragraphs (e.g., first 2 paragraphs).
+    Used by: app.py (Web API)
+    """
+    start_time = time.time()
+
+    if not os.path.exists(pdf_path):
+        logger.error(f"File not found: {pdf_path}")
+        raise FileNotFoundError(f"PDF not found at {pdf_path}")
+
     try:
-        # Changed to Index 0 to ensure we get the first available chunk
-        print("Attempting to extract Page 1, Paragraph 0...")
-        result = extract_paragraph(test_path, 1, 0)
-        print(
-            f"\nSUCCESS! Extracted Text (First 200 chars):\n{result['text'][:200]}..."
-        )
+        reader = PdfReader(pdf_path)
+        internal_page_idx = page_number - 1
+
+        if internal_page_idx < 0 or internal_page_idx >= len(reader.pages):
+            raise ValueError(f"Page {page_number} out of range.")
+
+        page = reader.pages[internal_page_idx]
+        full_text = page.extract_text()
+
+        # Same splitting strategy
+        paragraphs = [p.strip() for p in full_text.split("\n\n") if p.strip()]
+        if len(paragraphs) <= 1:
+            logger.info(
+                "Double newline split yielded minimal results. Trying single newline split."
+            )
+            paragraphs = [
+                line.strip() for line in full_text.split("\n") if line.strip()
+            ]
+
+        # Validate Range
+        if start_para < 0:
+            start_para = 0
+        if end_para > len(paragraphs):
+            end_para = len(paragraphs)
+
+        # Extract Range
+        selected_paragraphs = paragraphs[start_para:end_para]
+        target_text = " ".join(selected_paragraphs)
+
+        logger.info("--- Extraction Metadata (Range) ---")
+        logger.info(f"Source: {pdf_path}")
+        logger.info(f"Range: {start_para} to {end_para}")
+        logger.info(f"Time: {time.time() - start_time:.4f}s")
+
+        return target_text
+
     except Exception as e:
-        print(f"Test failed: {e}")
+        logger.error(f"Range extraction failed: {str(e)}")
+        raise e

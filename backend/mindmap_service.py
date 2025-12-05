@@ -1,19 +1,15 @@
-import logging
-import time
 import json
 import os
 import re
-from openai import OpenAI
+import time
+
 from dotenv import load_dotenv
+from openai import OpenAI
 
-# Load env vars
+from logger_config import setup_logger  # Use consistent logger
+
 load_dotenv()
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
-logger = logging.getLogger(__name__)
+logger = setup_logger(__name__)
 
 # Configuration
 base_url = os.getenv("LLM_BASE_URL", "http://ollama:11434/v1")
@@ -24,23 +20,17 @@ client = OpenAI(base_url=base_url, api_key=api_key)
 
 
 def clean_json_response(content):
-    """
-    Helper to extract JSON from LLM response if it includes markdown blocks.
-    """
-    # Remove markdown code blocks if present
+    """Helper to extract JSON from LLM response."""
     content = re.sub(r"```json\s*", "", content)
     content = re.sub(r"```\s*$", "", content)
     return content.strip()
 
 
 def generate_mindmap_json(transcript_text: str):
-    """
-    Asks LLM to convert text into a JSON topic hierarchy.
-    """
+    """Asks LLM to convert text into a JSON topic hierarchy."""
     start_time = time.time()
     logger.info("--- Processing Step: Mind Map Generation ---")
 
-    # System prompt to enforce strict JSON output
     system_prompt = (
         "You are a helpful assistant. Analyze the provided text and extract the main topic "
         "and subtopics. Output the result strictly as a valid JSON object with this structure: "
@@ -56,40 +46,37 @@ def generate_mindmap_json(transcript_text: str):
                 {"role": "user", "content": transcript_text},
             ],
             temperature=0.2,
-            response_format={"type": "json_object"},  # Forces JSON mode if supported
+            response_format={"type": "json_object"},
         )
 
         content = response.choices[0].message.content
-        logger.info(f"Raw LLM Output (Snippet): {content[:100]}...")
+        logger.info(f"Raw LLM Output (Snippet): {content[:50]}...")
 
-        # Clean and Parse JSON
         content = clean_json_response(content)
         mindmap_data = json.loads(content)
 
-        end_time = time.time()
-        logger.info(f"Mind Map Generation Time: {end_time - start_time:.4f}s")
-
+        logger.info(f"Mind Map Generation Time: {time.time() - start_time:.4f}s")
         return mindmap_data
 
-    except json.JSONDecodeError as e:
-        logger.error(f"Failed to parse JSON from LLM: {e}")
-        logger.error(f"Bad Content: {content}")
-        # Return a fallback error node so the app doesn't crash
-        return {
-            "root": "Error Parsing JSON",
-            "children": [{"name": "Raw Text", "children": []}],
-        }
     except Exception as e:
         logger.error(f"Mind Map generation failed: {e}")
-        raise e
+        # Fallback to prevent crash
+        return {
+            "root": "Error Parsing Data",
+            "children": [{"name": "Please try again", "children": []}],
+        }
 
 
-def save_mindmap_html(mindmap_json, output_file="mindmap.html"):
+# --- NEW: Exported function for UI ---
+def json_to_mermaid(mindmap_json):
     """
-    Converts JSON to a Mermaid graph and saves as HTML.
+    Converts JSON structure to Mermaid Syntax String.
+    Used by both the HTML generator and the API.
     """
+    if not mindmap_json:
+        return "graph TD;\nError[No Data]"
 
-    def json_to_mermaid(node, parent_id=None, node_id=0):
+    def parse_node(node, parent_id=None, node_id=0):
         lines = []
         current_id = f"node{node_id}"
 
@@ -101,16 +88,23 @@ def save_mindmap_html(mindmap_json, output_file="mindmap.html"):
         else:
             lines.append(f'    {current_id}["{label}"]')
 
-        child_id_counter = node_id + 1
+        counter = node_id + 1
         for child in node.get("children", []):
-            child_lines, next_id = json_to_mermaid(child, current_id, child_id_counter)
+            child_lines, new_counter = parse_node(child, current_id, counter)
             lines.extend(child_lines)
-            child_id_counter = next_id
+            counter = new_counter
 
-        return lines, child_id_counter
+        return lines, counter
 
-    mermaid_lines, _ = json_to_mermaid(mindmap_json)
-    mermaid_graph = "graph TD\n" + "\n".join(mermaid_lines)
+    lines, _ = parse_node(mindmap_json)
+    return "graph TD\n" + "\n".join(lines)
+
+
+def save_mindmap_html(mindmap_json, output_file="mindmap.html"):
+    """
+    Converts JSON to Mermaid HTML file using the helper above.
+    """
+    mermaid_graph = json_to_mermaid(mindmap_json)
 
     html_content = f"""
     <!DOCTYPE html>
@@ -131,20 +125,5 @@ def save_mindmap_html(mindmap_json, output_file="mindmap.html"):
     with open(output_file, "w") as f:
         f.write(html_content)
 
-    logger.info(f"--- Visualization Saved ---")
-    logger.info(f"Saved to: {os.path.abspath(output_file)}")
+    logger.info(f"Saved HTML to: {os.path.abspath(output_file)}")
     return output_file
-
-
-if __name__ == "__main__":
-    # Test data (simulating a good transcript paragraph)
-    test_transcript = (
-        "Software engineering requires models that can do more than just generate code. "
-        "When a person runs into a problem, they are able to temporarily stash the full context, "
-        "focus on resolving the issue, and then pop their mental stack to get back to the problem in hand."
-    )
-
-    print("Generating Mind Map...")
-    data = generate_mindmap_json(test_transcript)
-    save_mindmap_html(data, "test_mindmap.html")
-    print("Done! Check test_mindmap.html")
